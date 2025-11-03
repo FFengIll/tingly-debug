@@ -1,0 +1,40 @@
+{
+  "name": "Node.js Docker Container",
+  "description": "Debug a Node.js application running in Docker",
+  "type": "node",
+  "template": {
+    "type": "node",
+    "name": "Debug Node.js in Docker",
+    "request": "attach",
+    "address": "localhost",
+    "port": 9229,
+    "localRoot": "${workspaceFolder}",
+    "remoteRoot": "/app",
+    "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+    "skipFiles": ["<node_internals>/**"]
+  },
+  "variables": [
+    {
+      "name": "port",
+      "description": "Debug port",
+      "type": "number",
+      "defaultValue": 9229,
+      "required": true
+    },
+    {
+      "name": "localRoot",
+      "description": "Local source directory",
+      "type": "string",
+      "defaultValue": "${workspaceFolder}",
+      "required": true
+    },
+    {
+      "name": "remoteRoot",
+      "description": "Remote source directory in container",
+      "type": "string",
+      "defaultValue": "/app",
+      "required": true
+    }
+  ],
+  "applicableTo": ["javascript", "typescript", "docker"]
+}

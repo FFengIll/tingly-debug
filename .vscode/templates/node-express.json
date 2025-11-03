@@ -1,0 +1,35 @@
+{
+  "name": "Node.js Express Server",
+  "description": "Debug a Node.js Express application",
+  "type": "node",
+  "template": {
+    "type": "node",
+    "name": "Debug Express Server",
+    "request": "launch",
+    "program": "${workspaceFolder}/app.js",
+    "env": {
+      "NODE_ENV": "development"
+    },
+    "console": "integratedTerminal",
+    "restart": true,
+    "runtimeExecutable": "nodemon",
+    "stopOnEntry": false
+  },
+  "variables": [
+    {
+      "name": "program",
+      "description": "Entry point file",
+      "type": "string",
+      "defaultValue": "${workspaceFolder}/app.js",
+      "required": true
+    },
+    {
+      "name": "env",
+      "description": "Environment variables",
+      "type": "array",
+      "defaultValue": ["NODE_ENV=development"],
+      "required": false
+    }
+  ],
+  "applicableTo": ["javascript", "typescript"]
+}

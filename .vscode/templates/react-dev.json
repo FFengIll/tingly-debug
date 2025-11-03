@@ -1,0 +1,39 @@
+{
+  "name": "React Development Server",
+  "description": "Debug a React application in development mode",
+  "type": "chrome",
+  "template": {
+    "type": "chrome",
+    "name": "Debug React App",
+    "request": "launch",
+    "url": "http://localhost:3000",
+    "webRoot": "${workspaceFolder}/src",
+    "sourceMaps": true,
+    "userDataDir": false,
+    "runtimeExecutable": "chrome"
+  },
+  "variables": [
+    {
+      "name": "url",
+      "description": "Development server URL",
+      "type": "string",
+      "defaultValue": "http://localhost:3000",
+      "required": true
+    },
+    {
+      "name": "webRoot",
+      "description": "Source code directory",
+      "type": "string",
+      "defaultValue": "${workspaceFolder}/src",
+      "required": true
+    },
+    {
+      "name": "port",
+      "description": "Development server port",
+      "type": "number",
+      "defaultValue": 3000,
+      "required": false
+    }
+  ],
+  "applicableTo": ["javascript", "typescript", "react"]
+}

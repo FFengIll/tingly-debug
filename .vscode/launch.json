@@ -16,6 +16,33 @@
 				"${workspaceFolder}/out/**/*.js"
 			],
 			"preLaunchTask": "${defaultBuildTask}"
+		},
+		{
+			"name": "Debug Current File",
+			"type": "node",
+			"request": "launch",
+			"program": "${file}",
+			"console": "integratedTerminal",
+			"stopOnEntry": false
+		},
+		{
+			"name": "Test Extension",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}",
+				"--extensionTestsPath=${workspaceFolder}/out/test/suite/index"
+			],
+			"outFiles": [
+				"${workspaceFolder}/out/test/**/*.js"
+			],
+			"preLaunchTask": "${defaultBuildTask}"
+		}
+	],
+	"compounds": [
+		{
+			"name": "Extension Development",
+			"configurations": ["Run Extension", "Debug Current File"]
 		}
 	]
 }
