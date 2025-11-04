@@ -4,6 +4,7 @@ import { LaunchConfiguration, LaunchCompound } from './types';
 import { ConfigurationEditor } from './configurationEditor';
 import { FileTypeMapper } from './fileTypeMapper';
 import { SymbolDetector, CommandGenerator, SymbolInfo } from './symbolCommandGenerator';
+import { ConfigurationGenerator, ConfigurationTarget } from './configurationGenerator';
 
 export function registerCommandHandlers(
     context: vscode.ExtensionContext,
@@ -17,11 +18,14 @@ export function registerCommandHandlers(
     async function handleGenerateCommand(commandType: 'run' | 'debug'): Promise<void> {
         try {
             // Get the selected symbol
-            const symbol = await SymbolDetector.getSelectedSymbolPath();
+            let symbol = await SymbolDetector.getSelectedSymbolPath();
 
             if (!symbol) {
-                vscode.window.showWarningMessage('Please select a symbol (function, class, method, or test) to generate a command.');
-                return;
+                // Try to show symbol selector
+                symbol = await showSymbolSelector();
+                if (!symbol) {
+                    return;
+                }
             }
 
             // Generate the command
@@ -320,11 +324,11 @@ export function registerCommandHandlers(
 
         // Generate unique configuration name
         const baseConfigName = FileTypeMapper.generateConfigName(currentFile, workspaceRoot);
-        const launchJson = await provider.readLaunchJson();
+        const configurations = await provider.readConfigurationsOnly();
         let finalConfigName = baseConfigName;
         let counter = 1;
 
-        while (launchJson.configurations.some(config => config.name === finalConfigName)) {
+        while (configurations.some(config => config.name === finalConfigName)) {
             finalConfigName = `${baseConfigName} - ${counter}`;
             counter++;
         }
@@ -371,6 +375,11 @@ export function registerCommandHandlers(
         await handleGenerateCommand('debug');
     });
 
+    // Generate debug configuration from directory
+    const generateDebugConfigFromDirectoryCommand = vscode.commands.registerCommand('ddd.generateDebugConfigFromDirectory', async (uri: vscode.Uri) => {
+        await handleGenerateDirectoryDebugConfig(uri, provider);
+    });
+
     // Hello world command
     const helloWorldCommand = vscode.commands.registerCommand('ddd.helloWorld', () => {
         vscode.window.showInformationMessage('Hello World from Debug and Run Configurations extension!');
@@ -389,6 +398,212 @@ export function registerCommandHandlers(
         openSettingsCommand,
         generateRunCommandCommand,
         generateDebugCommandCommand,
+        generateDebugConfigFromDirectoryCommand,
         helloWorldCommand
     );
+}
+
+/**
+ * Show symbol selector when no symbol is selected
+ */
+async function showSymbolSelector(): Promise<SymbolInfo | null> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+        vscode.window.showWarningMessage('No active editor found.');
+        return null;
+    }
+
+    const document = editor.document;
+
+    // Get document symbols
+    const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+        'vscode.executeDocumentSymbolProvider',
+        document.uri
+    );
+
+    if (!symbols || symbols.length === 0) {
+        vscode.window.showWarningMessage('No symbols found in this file. You can select functions, classes, methods, or tests.');
+        return null;
+    }
+
+    // Flatten symbols into a quick pick list
+    const symbolItems = await flattenSymbolItems(symbols, document);
+
+    if (symbolItems.length === 0) {
+        vscode.window.showWarningMessage('No selectable symbols found in this file.');
+        return null;
+    }
+
+    // Show quick pick
+    const selected = await vscode.window.showQuickPick(symbolItems, {
+        placeHolder: 'Select a symbol to generate command',
+        title: `Symbols in ${document.fileName.split(/[/\\]/).pop()}`
+    });
+
+    if (!selected) {
+        return null;
+    }
+
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    const workspaceRoot = workspaceFolders?.[0]?.uri.fsPath || '';
+
+    return {
+        name: selected.symbol.name,
+        path: selected.path,
+        kind: selected.symbol.kind,
+        language: document.languageId,
+        filePath: document.uri.fsPath,
+        workspaceRoot
+    };
+}
+
+/**
+ * Flatten symbol tree into quick pick items
+ */
+async function flattenSymbolItems(
+    symbols: vscode.DocumentSymbol[],
+    document: vscode.TextDocument,
+    parentPath: string[] = [],
+    level: number = 0
+): Promise<Array<{ label: string; description: string; detail: string; symbol: vscode.DocumentSymbol; path: string[] }>> {
+    const items: Array<{ label: string; description: string; detail: string; symbol: vscode.DocumentSymbol; path: string[] }> = [];
+    const indent = '  '.repeat(level);
+
+    for (const symbol of symbols) {
+        const currentPath = [...parentPath, symbol.name];
+        const kindIcon = getSymbolIcon(symbol.kind);
+        const label = `${indent}${kindIcon} ${symbol.name}`;
+
+        // Only add executable symbols (functions, methods, classes with methods, tests)
+        if (isExecutableSymbol(symbol)) {
+            items.push({
+                label,
+                description: getSymbolTypeDescription(symbol.kind),
+                detail: `Line ${symbol.range.start.line + 1}`,
+                symbol,
+                path: currentPath
+            });
+        }
+
+        // Recursively add children
+        const childItems = await flattenSymbolItems(symbol.children, document, currentPath, level + 1);
+        items.push(...childItems);
+    }
+
+    return items;
+}
+
+/**
+ * Check if a symbol is executable (can be run/debugged)
+ */
+function isExecutableSymbol(symbol: vscode.DocumentSymbol): boolean {
+    switch (symbol.kind) {
+        case vscode.SymbolKind.Function:
+        case vscode.SymbolKind.Method:
+        case vscode.SymbolKind.Constructor:
+        case vscode.SymbolKind.Class:
+        case vscode.SymbolKind.Module:
+        case vscode.SymbolKind.Package:
+            return true;
+        case vscode.SymbolKind.Variable:
+        case vscode.SymbolKind.Constant:
+            // Check if it might be a test function based on name
+            const name = symbol.name.toLowerCase();
+            return name.includes('test') || name.startsWith('should') || name.startsWith('it');
+        default:
+            return false;
+    }
+}
+
+/**
+ * Get icon for symbol kind
+ */
+function getSymbolIcon(kind: vscode.SymbolKind): string {
+    switch (kind) {
+        case vscode.SymbolKind.Function: return '$(symbol-method)';
+        case vscode.SymbolKind.Method: return '$(symbol-method)';
+        case vscode.SymbolKind.Constructor: return '$(symbol-method)';
+        case vscode.SymbolKind.Class: return '$(symbol-class)';
+        case vscode.SymbolKind.Module: return '$(symbol-misc)';
+        case vscode.SymbolKind.Package: return '$(symbol-namespace)';
+        case vscode.SymbolKind.Variable: return '$(symbol-variable)';
+        case vscode.SymbolKind.Constant: return '$(symbol-constant)';
+        default: return '$(symbol-misc)';
+    }
+}
+
+/**
+ * Get description for symbol type
+ */
+function getSymbolTypeDescription(kind: vscode.SymbolKind): string {
+    switch (kind) {
+        case vscode.SymbolKind.Function: return 'function';
+        case vscode.SymbolKind.Method: return 'method';
+        case vscode.SymbolKind.Constructor: return 'constructor';
+        case vscode.SymbolKind.Class: return 'class';
+        case vscode.SymbolKind.Module: return 'module';
+        case vscode.SymbolKind.Package: return 'package';
+        case vscode.SymbolKind.Variable: return 'variable';
+        case vscode.SymbolKind.Constant: return 'constant';
+        default: return 'symbol';
+    }
+}
+
+/**
+ * Handle directory debug configuration generation
+ */
+async function handleGenerateDirectoryDebugConfig(uri: vscode.Uri, debugProvider: DebugConfigurationProvider): Promise<void> {
+    try {
+        if (!uri) {
+            vscode.window.showErrorMessage('No directory selected.');
+            return;
+        }
+
+        const directoryPath = uri.fsPath;
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const workspaceRoot = workspaceFolders?.[0]?.uri.fsPath || '';
+
+        // Get relative path from workspace
+        const relativePath = vscode.workspace.asRelativePath(directoryPath);
+        const directoryName = directoryPath.split(/[/\\]/).pop() || relativePath;
+
+        // Detect framework in directory
+        const detectedFramework = await ConfigurationGenerator.detectFrameworkForDirectory(directoryPath, workspaceRoot);
+
+        // Show framework selection
+        const selectedFramework = await ConfigurationGenerator.showFrameworkSelector(
+            detectedFramework || undefined,
+            'directory'
+        );
+
+        if (!selectedFramework) {
+            return; // User cancelled
+        }
+
+        // Create configuration target
+        const target: ConfigurationTarget = {
+            type: 'directory',
+            name: directoryName,
+            path: relativePath,
+            workspaceRoot
+        };
+
+        // Generate and save configuration
+        const success = await ConfigurationGenerator.createAndSaveConfiguration(
+            target,
+            selectedFramework,
+            debugProvider
+        );
+
+        if (success) {
+            vscode.window.showInformationMessage(
+                `Debug configuration for ${selectedFramework.name} in "${directoryName}" created successfully!`
+            );
+        }
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Failed to generate debug configuration: ${errorMessage}`);
+        console.error('Directory debug config generation error:', error);
+    }
 }
