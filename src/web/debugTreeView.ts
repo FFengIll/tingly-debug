@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ClickBehavior, LaunchCompound, LaunchConfiguration, LaunchJson } from './types';
-import { parseJSONC, serializeJSONC, updateLaunchConfiguration, addLaunchConfiguration, removeLaunchConfiguration } from './jsoncUtils';
+import { parseJSONC, parseJSONCConfigurations, serializeJSONC, updateLaunchConfiguration, addLaunchConfiguration, removeLaunchConfiguration } from './jsoncUtils';
 
 export class DebugConfigurationItem extends vscode.TreeItem {
     constructor(
@@ -124,7 +124,7 @@ export class DebugConfigurationProvider implements vscode.TreeDataProvider<Debug
 
     getChildren(element?: DebugConfigurationItem): Thenable<DebugConfigurationItem[]> {
         if (!element) {
-            // Root level - return all configurations and compounds
+            // Root level - return all configurations
             return this.getConfigurations();
         }
         return Promise.resolve([]);
@@ -132,27 +132,20 @@ export class DebugConfigurationProvider implements vscode.TreeDataProvider<Debug
 
     public async getConfigurations(): Promise<DebugConfigurationItem[]> {
         try {
-            const launchJson = await this.readLaunchJson();
+            const configurations = await this.readConfigurationsOnly();
             const config = vscode.workspace.getConfiguration('ddd');
             const clickBehavior = config.get<ClickBehavior>('clickBehavior', 'openSettings');
 
             const items: DebugConfigurationItem[] = [];
 
-            // Add configurations
-            for (const config of launchJson.configurations) {
+            // Add configurations only
+            for (const config of configurations) {
                 items.push(new DebugConfigurationItem(config, vscode.TreeItemCollapsibleState.None, clickBehavior));
-            }
-
-            // Add compounds if they exist
-            if (launchJson.compounds) {
-                for (const compound of launchJson.compounds) {
-                    items.push(new DebugConfigurationItem(compound, vscode.TreeItemCollapsibleState.None, clickBehavior));
-                }
             }
 
             return items;
         } catch (error) {
-            console.error('Error reading launch.json:', error);
+            console.error('Error reading launch.json configurations:', error);
             return [];
         }
     }
@@ -170,6 +163,19 @@ export class DebugConfigurationProvider implements vscode.TreeDataProvider<Debug
                 version: "0.2.0",
                 configurations: []
             };
+        }
+    }
+
+    public async readConfigurationsOnly(): Promise<LaunchConfiguration[]> {
+        try {
+            const launchUri = vscode.Uri.file(this.launchJsonPath);
+            const document = await vscode.workspace.openTextDocument(launchUri);
+            const content = document.getText();
+            return parseJSONCConfigurations(content);
+        } catch (error) {
+            // Return empty array if file doesn't exist or is invalid
+            console.warn('Failed to read launch.json configurations, returning empty array:', error);
+            return [];
         }
     }
 
