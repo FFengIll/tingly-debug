@@ -555,7 +555,7 @@ API_URL=http://localhost:3000
             <h2>Configuration Settings</h2>
             <div class="header-actions">
                 <button type="button" class="run-btn" onclick="runConfiguration()" title="Run configuration without breakpoints">
-                    <span class="codicon codicon-play"></span> Run (No Breakpoints)
+                    <span class="codicon codicon-play"></span> Run
                 </button>
                 <button type="button" class="debug-btn" onclick="debugConfiguration()" title="Debug configuration with breakpoints">
                     <span class="codicon codicon-debug-alt"></span> Debug
