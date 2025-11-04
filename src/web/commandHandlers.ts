@@ -122,7 +122,12 @@ export function registerCommandHandlers(
                 vscode.window.showWarningMessage('Cannot run compound configurations directly. Please select an individual configuration.');
                 return;
             }
+
+            // Disable all breakpoints for run mode
+            await vscode.commands.executeCommand('workbench.debug.viewlet.action.disableAllBreakpoints');
+
             await vscode.debug.startDebugging(undefined, item.config as LaunchConfiguration);
+            vscode.window.showInformationMessage(`Configuration "${item.config.name}" is now running (breakpoints disabled)!`);
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to start debug session: ${error}`);
         }
@@ -136,7 +141,12 @@ export function registerCommandHandlers(
                 vscode.window.showWarningMessage('Cannot debug compound configurations directly. Please select an individual configuration.');
                 return;
             }
+
+            // Enable all breakpoints for debug mode
+            await vscode.commands.executeCommand('workbench.debug.viewlet.action.enableAllBreakpoints');
+
             await vscode.debug.startDebugging(undefined, item.config as LaunchConfiguration);
+            vscode.window.showInformationMessage(`Configuration "${item.config.name}" is now debugging (breakpoints enabled)!`);
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to start debug session: ${error}`);
         }

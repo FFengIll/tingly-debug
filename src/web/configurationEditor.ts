@@ -61,14 +61,17 @@ export class ConfigurationEditor {
                             // Save the configuration first
                             await provider.updateConfiguration(configData.name, message.config);
 
-                            // Then start debugging without the 'launch' request type
+                            // Disable all breakpoints for run mode
+                            await vscode.commands.executeCommand('workbench.debug.viewlet.action.disableAllBreakpoints');
+
+                            // Then start debugging in run mode
                             const configToRun = { ...message.config };
                             if (configToRun.request === 'launch') {
                                 configToRun.request = 'launch';
                             }
 
                             await vscode.debug.startDebugging(undefined, configToRun);
-                            vscode.window.showInformationMessage(`Configuration "${configToRun.name}" is now running!`);
+                            vscode.window.showInformationMessage(`Configuration "${configToRun.name}" is now running (breakpoints disabled)!`);
                             panel.dispose();
                         } catch (error) {
                             panel.webview.postMessage({
@@ -82,14 +85,17 @@ export class ConfigurationEditor {
                             // Save the configuration first
                             await provider.updateConfiguration(configData.name, message.config);
 
-                            // Then start debugging without the 'launch' request type
+                            // Enable all breakpoints for debug mode
+                            await vscode.commands.executeCommand('workbench.debug.viewlet.action.enableAllBreakpoints');
+
+                            // Then start debugging in debug mode
                             const configToDebug = { ...message.config };
                             if (configToDebug.request === 'launch') {
                                 configToDebug.request = 'launch';
                             }
 
                             await vscode.debug.startDebugging(undefined, configToDebug);
-                            vscode.window.showInformationMessage(`Configuration "${configToDebug.name}" is now debugging!`);
+                            vscode.window.showInformationMessage(`Configuration "${configToDebug.name}" is now debugging (breakpoints enabled)!`);
                             panel.dispose();
                         } catch (error) {
                             panel.webview.postMessage({
@@ -548,10 +554,10 @@ API_URL=http://localhost:3000
         <div class="header">
             <h2>Configuration Settings</h2>
             <div class="header-actions">
-                <button type="button" class="run-btn" onclick="runConfiguration()" title="Run configuration">
-                    <span class="codicon codicon-play"></span> Run
+                <button type="button" class="run-btn" onclick="runConfiguration()" title="Run configuration without breakpoints">
+                    <span class="codicon codicon-play"></span> Run (No Breakpoints)
                 </button>
-                <button type="button" class="debug-btn" onclick="debugConfiguration()" title="Debug configuration">
+                <button type="button" class="debug-btn" onclick="debugConfiguration()" title="Debug configuration with breakpoints">
                     <span class="codicon codicon-debug-alt"></span> Debug
                 </button>
             </div>
