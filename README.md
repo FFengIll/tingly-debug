@@ -1,116 +1,167 @@
-# Debug Configurations
+# Tingly Run / Debug Configurations
 
-A PyCharm-inspired debug and run configuration manager for VS Code that provides a better UI for managing your debug configurations with launch.json synchronization.
+A Jetbrains-inspired debug and run configuration manager for Visual Studio Code that provides an intuitive UI for managing debug configurations with seamless launch.json synchronization.
 
-## Features
+## Overview
 
-- **🎯 Configuration View**: Clean, organized tree view with type-specific icons for configurations and compounds
-- **🔄 Launch.json Sync**: Automatically synchronizes with your `.vscode/launch.json` file
-- **💡 Quick Configuration**: Create configurations instantly from active files with smart type detection
-- **➕ Guided Setup**: Add new debug configurations with step-by-step configuration
-- **⚙️ Visual Editor**: Comprehensive configuration editor with form-based editing and JSON preview
-- **✏️ In-place Editing**: Edit configuration names and properties directly
-- **🗑️ Safe Deletion**: Remove configurations with confirmation prompts
-- **📋 Duplicate Configurations**: Quickly copy existing configurations
-- **▶️ Quick Launch**: Run configurations with or without debugging
-- **🔄 Auto-refresh**: Automatically updates when launch.json changes
-- **🎨 Smart Icons**: Visual icons that match your development environment (Node.js, Python, Chrome, etc.)
+Tingly transforms the way you manage debug configurations in VS Code by providing a clean, organized interface similar to popular IDEs like PyCharm. Say goodbye to manually editing JSON files and hello to visual configuration management.
 
-## Usage
+## ✨ Key Features
 
-### Accessing the Configuration View
+### 🎯 **Configuration Management**
+- **Clean Tree View**: Organized configuration display with type-specific icons
+- **Launch.json Sync**: Automatic synchronization with your `.vscode/launch.json`
+- **Compound Support**: Full support for compound debug configurations
+- **Auto-refresh**: Real-time updates when launch.json changes
 
-1. Open the Debug view (Ctrl+Shift+D or Cmd+Shift+D)
-2. Look for the "Configurations" panel in the Debug sidebar
-3. All your debug configurations will appear in an organized list
+### 🚀 **Quick Actions**
+- **Smart Configuration**: Instant config creation from active files with intelligent type detection
+- **One-click Debugging**: Launch configurations with or without debugging
+- **Duplicate Configurations**: Quickly copy and modify existing setups
+- **Safe Deletion**: Remove configurations with confirmation prompts
 
-### Adding a New Configuration
+### ⚙️ **Visual Configuration Editor**
+- **Form-based Interface**: Edit all launch.json properties through intuitive forms
+- **Real-time JSON Preview**: See the generated JSON as you type
+- **Dynamic Fields**: Add or remove configuration properties on demand
+- **Smart Value Parsing**: Automatic detection of JSON vs string values
+- **Error Validation**: Instant feedback for configuration conflicts
 
-**Quick Configuration**:
+## 🚀 Getting Started
+
+### Installation
+
+1. Open VS Code
+2. Go to Extensions (Ctrl+Shift+X or Cmd+Shift+X)
+3. Search for "Tingly Run / Debug Configurations"
+4. Click Install
+
+### First Time Setup
+
+1. Open the Debug view (**Ctrl+Shift+D** or **Cmd+Shift+D**)
+2. Locate the **"ddd Configurations"** panel in the Debug sidebar
+3. Your existing debug configurations will appear automatically
+
+## 📖 Usage Guide
+
+### Creating New Configurations
+
+#### Quick Configuration (Recommended)
 1. Open the file you want to debug
-2. Click the lightbulb (💡) button in the Configurations panel
-3. A configuration will be automatically created based on the file type
+2. Click the **💡 Quick Configuration** button in the Configurations panel
+3. A configuration is automatically created based on your file type
 
-**Manual Configuration**:
-1. Click the "Add Configuration" (+) button in the Configurations panel
-2. Enter a configuration name
-3. Select the configuration type (Node.js, Python, Chrome, etc.)
-4. Choose the request type (launch or attach)
-5. The configuration will be automatically added to your launch.json
+#### Manual Configuration
+1. Click the **➕ Add Configuration** button
+2. Enter a descriptive name
+3. Select your configuration type:
+   - Node.js
+   - Python
+   - Chrome/Edge/Firefox
+   - Extension Host (VS Code extensions)
+   - CoreCLR (.NET)
+   - Custom types
+4. Choose launch or attach mode
+5. The configuration is automatically saved to launch.json
 
-### Managing Configurations
+### Managing Existing Configurations
 
-- **Run**: Click the play (▶️) icon to run without debugging
-- **Debug**: Click the debug (🐛) icon to start debugging
-- **Settings**: Click the gear (⚙️) icon to open the configuration editor
-- **Edit**: Right-click and select "Edit" to modify the configuration name
-- **Duplicate**: Right-click and select "Duplicate" to copy a configuration
-- **Delete**: Right-click and select "Delete" to remove a configuration
+#### Toolbar Actions
+- **▶️ Run**: Execute without debugging
+- **🐛 Debug**: Start debugging session
+- **⚙️ Settings**: Open visual configuration editor
 
-### Configuration Editor
+#### Context Menu (Right-click)
+- **Edit**: Modify configuration name
+- **Duplicate**: Create a copy with modifications
+- **Delete**: Remove with confirmation
 
-Click the gear (⚙️) icon on any configuration to open a comprehensive editor with:
+### Configuration Editor Features
 
-- **Visual Property Editing**: Edit all launch.json fields through a form interface
-- **Name Editing**: Edit configuration names with duplicate name validation
-- **Dynamic Field Management**: Add or remove configuration properties
-- **Real-time JSON Preview**: See the resulting JSON as you type
-- **Smart Value Parsing**: Automatically detects JSON vs string values
-- **Error Handling**: Get instant feedback when configuration names conflict
+Click the **⚙️** icon on any configuration to access advanced editing:
 
-### Configuration Types Supported
+- **Property Management**: Add/remove configuration fields dynamically
+- **Live JSON Preview**: See real-time JSON output
+- **Name Validation**: Prevent duplicate configuration names
+- **Smart Input**: Automatic value type detection
+- **Error Handling**: Clear validation messages
 
-- Node.js
-- Python
-- Chrome
-- Edge
-- Firefox
-- Extension Host (for VS Code extensions)
-- CoreCLR (.NET)
-- Custom types
-
-## Compatibility
-
-This extension works with standard VS Code launch.json format and supports:
-
-- Debug configurations
-- Compound configurations
-- All standard VS Code debug attributes
-- Workspace-specific launch.json files
-
-## Requirements
-
-- VS Code 1.105.0 or higher
-- Web extension compatible
-
-## Settings
-
-This extension provides the following configuration options:
+## ⚙️ Extension Settings
 
 ### Click Behavior
 
-**`ddd.clickBehavior`**: Controls what happens when you click on a configuration item in the tree view.
+**`ddd.clickBehavior`**: Controls interaction with configuration items
 
-- **`openSettings`** (default): Clicking an item opens the configuration settings editor
-- **`none`**: Clicking an item has no action (use toolbar buttons instead)
+- **`openSettings`** (default): Click opens configuration editor
+- **`none`**: Click has no action (use toolbar buttons)
 
-You can change this setting in VS Code:
-1. Open Settings (Ctrl+, or Cmd+,)
+#### How to Configure
+1. Open VS Code Settings (**Ctrl+,** or **Cmd+,**)
 2. Search for "Debug Configurations"
-3. Find the "Click Behavior" option
+3. Find "Click Behavior" option
 4. Select your preferred behavior
 
-## Release Notes
+## 🔧 Compatibility
 
-### 0.0.1
+This extension seamlessly integrates with:
 
-Initial release with:
-- Configuration tree view
-- Launch.json synchronization
-- Add, edit, delete, and duplicate configurations
-- Run and debug support
-- Compound configuration support
+- **Standard VS Code launch.json format**
+- **All VS Code debug attributes**
+- **Workspace-specific configurations**
+- **Compound debug configurations**
+- **Multi-root workspaces**
+
+## 📋 System Requirements
+
+- **VS Code 1.105.0** or higher
+- **Web extension compatible** (runs in browser-based VS Code)
+
+## 🛠️ Supported Languages & Runtimes
+
+| Language/Platform | Debug Types |
+|-------------------|-------------|
+| **JavaScript/TypeScript** | Node.js, Chrome, Edge, Firefox |
+| **Python** | Python debugging |
+| **.NET** | CoreCLR debugging |
+| **VS Code Extensions** | Extension Host debugging |
+| **Custom** | Any custom debug configuration |
+
+## 📝 Changelog
+
+see [CHANGELOG](CHANGELOG.md)
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details on:
+
+- Reporting bugs
+- Requesting features
+- Submitting pull requests
+- Development setup
+
+## 📄 License
+
+This extension is released under the [MIT License](LICENSE).
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**Q: Configurations not appearing?**
+A: Ensure you have a `.vscode/launch.json` file in your workspace. The extension automatically creates one when you add your first configuration.
+
+**Q: Click behavior not working?**
+A: Check your `ddd.clickBehavior` setting in VS Code preferences.
+
+**Q: Configuration not saving?**
+A: Verify your workspace folder has write permissions and check if launch.json is read-only.
+
+### Support
+
+For issues and feature requests:
+- Create an issue on our [GitHub repository](https://github.com/your-repo/tingly-debug)
+- Check existing issues for solutions
 
 ---
 
-**Enjoy better debug configuration management in VS Code!**
+**Transform your VS Code debugging experience with Tingly! 🚀**

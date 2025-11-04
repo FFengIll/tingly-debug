@@ -1,7 +1,7 @@
 {
-    "name": "ddd",
-    "displayName": "Debug Configurations",
-    "description": "A PyCharm-inspired debug and run configuration manager for VS Code",
+    "name": "tingly-debug",
+    "displayName": "Tingly Run / Debug Configurations",
+    "description": "A debug and run configuration manager and UI for VS Code",
     "version": "0.0.1",
     "engines": {
         "vscode": "^1.105.0"
