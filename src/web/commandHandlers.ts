@@ -3,12 +3,111 @@ import { DebugConfigurationProvider, DebugConfigurationItem } from './debugTreeV
 import { LaunchConfiguration, LaunchCompound } from './types';
 import { ConfigurationEditor } from './configurationEditor';
 import { FileTypeMapper } from './fileTypeMapper';
+import { SymbolDetector, CommandGenerator, SymbolInfo } from './symbolCommandGenerator';
 
 export function registerCommandHandlers(
     context: vscode.ExtensionContext,
     provider: DebugConfigurationProvider,
     treeView: vscode.TreeView<DebugConfigurationItem>
 ): void {
+
+    /**
+     * Handle command generation for run or debug
+     */
+    async function handleGenerateCommand(commandType: 'run' | 'debug'): Promise<void> {
+        try {
+            // Get the selected symbol
+            const symbol = await SymbolDetector.getSelectedSymbolPath();
+
+            if (!symbol) {
+                vscode.window.showWarningMessage('Please select a symbol (function, class, method, or test) to generate a command.');
+                return;
+            }
+
+            // Generate the command
+            const commandTemplate = commandType === 'run'
+                ? await CommandGenerator.generateRunCommand(symbol)
+                : await CommandGenerator.generateDebugCommand(symbol);
+
+            if (!commandTemplate) {
+                vscode.window.showErrorMessage(`Could not generate ${commandType} command for ${symbol.language} symbol "${symbol.name}"`);
+                return;
+            }
+
+            // Format the command for display
+            const formattedCommand = CommandGenerator.formatCommand(commandTemplate);
+
+            // Show action options
+            const action = await vscode.window.showQuickPick([
+                { label: '$(terminal) Run in Terminal', description: `Execute command in integrated terminal`, value: 'terminal' },
+                { label: '$(clippy) Copy to Clipboard', description: `Copy command to clipboard`, value: 'clipboard' },
+                { label: '$(debug) Create Debug Configuration', description: `Add as debug configuration to launch.json`, value: 'debug' }
+            ], {
+                placeHolder: `Generated ${commandType} command: ${formattedCommand}`,
+                title: `${commandType === 'run' ? 'Run' : 'Debug'} Command for "${symbol.name}"`
+            });
+
+            if (!action) {
+                return;
+            }
+
+            switch (action.value) {
+                case 'terminal':
+                    await executeInTerminal(commandTemplate, symbol);
+                    break;
+                case 'clipboard':
+                    await vscode.env.clipboard.writeText(formattedCommand);
+                    vscode.window.showInformationMessage(`Command copied to clipboard: ${formattedCommand}`);
+                    break;
+                case 'debug':
+                    await createDebugConfiguration(commandTemplate, symbol, provider);
+                    break;
+            }
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Failed to generate command: ${errorMessage}`);
+            console.error('Command generation error:', error);
+        }
+    }
+
+    /**
+     * Execute command in integrated terminal
+     */
+    async function executeInTerminal(commandTemplate: any, symbol: SymbolInfo): Promise<void> {
+        const terminal = vscode.window.createTerminal({
+            name: `${symbol.language} ${symbol.name}`,
+            cwd: commandTemplate.cwd || symbol.workspaceRoot
+        });
+
+        // Set environment variables if needed
+        if (commandTemplate.env) {
+            Object.entries(commandTemplate.env).forEach(([key, value]) => {
+                terminal.sendText(`export ${key}="${value}"`);
+            });
+        }
+
+        // Execute the command
+        const formattedCommand = CommandGenerator.formatCommand(commandTemplate);
+        terminal.sendText(formattedCommand);
+        terminal.show();
+
+        vscode.window.showInformationMessage(`Running ${symbol.name} in terminal`);
+    }
+
+    /**
+     * Create debug configuration from command template
+     */
+    async function createDebugConfiguration(commandTemplate: any, symbol: SymbolInfo, debugProvider: DebugConfigurationProvider): Promise<void> {
+        const debugConfig = CommandGenerator.createDebugConfiguration(commandTemplate, symbol);
+
+        try {
+            await debugProvider.addConfiguration(debugConfig);
+            vscode.window.showInformationMessage(`Debug configuration "${debugConfig.name}" created successfully!`);
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to create debug configuration: ${error}`);
+        }
+    }
 
     // Refresh command
     const refreshCommand = vscode.commands.registerCommand('ddd.debugConfig.refresh', async () => {
@@ -262,6 +361,16 @@ export function registerCommandHandlers(
         ConfigurationEditor.openConfigurationEditor(item.config, provider);
     });
 
+    // Generate run command from symbol
+    const generateRunCommandCommand = vscode.commands.registerCommand('ddd.generateRunCommand', async () => {
+        await handleGenerateCommand('run');
+    });
+
+    // Generate debug command from symbol
+    const generateDebugCommandCommand = vscode.commands.registerCommand('ddd.generateDebugCommand', async () => {
+        await handleGenerateCommand('debug');
+    });
+
     // Hello world command
     const helloWorldCommand = vscode.commands.registerCommand('ddd.helloWorld', () => {
         vscode.window.showInformationMessage('Hello World from Debug and Run Configurations extension!');
@@ -278,6 +387,8 @@ export function registerCommandHandlers(
         debugCommand,
         createFromFileCommand,
         openSettingsCommand,
+        generateRunCommandCommand,
+        generateDebugCommandCommand,
         helloWorldCommand
     );
 }

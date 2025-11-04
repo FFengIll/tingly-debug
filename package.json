@@ -65,6 +65,12 @@
                 "command": "ddd.debugConfig.openSettings",
                 "title": "ddd: Configuration Settings",
                 "icon": "$(gear)"
+            },
+
+            {
+                "command": "ddd.generateDebugCommand",
+                "title": "ddd: Generate Debug Command from Symbol",
+                "icon": "$(debug)"
             }
         ],
         "views": {
@@ -98,6 +104,16 @@
                     "command": "ddd.debugConfig.createFromFile",
                     "when": "resourceExtname =~ /\\.(js|ts|tsx|jsx|mjs|cjs|py|java|cpp|c|go|rs|php|rb|cs|html|htm|dart|ps1|sh|bash|zsh|fish|lua|ex|exs|kt|kts|scala|sc)$/",
                     "group": "navigation"
+                },
+                {
+                    "command": "ddd.generateRunCommand",
+                    "when": "resourceExtname =~ /\\.(js|ts|tsx|jsx|mjs|cjs|py|java|cpp|c|go|rs|php|rb|cs|html|htm|dart|ps1|sh|bash|zsh|fish|lua|ex|exs|kt|kts|scala|sc)$/",
+                    "group": "1_symbol@1"
+                },
+                {
+                    "command": "ddd.generateDebugCommand",
+                    "when": "resourceExtname =~ /\\.(js|ts|tsx|jsx|mjs|cjs|py|java|cpp|c|go|rs|php|rb|cs|html|htm|dart|ps1|sh|bash|zsh|fish|lua|ex|exs|kt|kts|scala|sc)$/",
+                    "group": "1_symbol@2"
                 }
             ],
             "view/item/context": [
@@ -169,6 +185,8 @@
         "@types/webpack-env": "^1.18.8",
         "@typescript-eslint/eslint-plugin": "^8.46.2",
         "@typescript-eslint/parser": "^8.46.2",
+        "@vscode/test-cli": "^0.0.12",
+        "@vscode/test-electron": "^2.5.2",
         "@vscode/test-web": "^0.0.74",
         "assert": "^2.1.0",
         "eslint": "^9.39.0",
@@ -178,5 +196,9 @@
         "typescript": "^5.9.3",
         "webpack": "^5.102.1",
         "webpack-cli": "^6.0.1"
+    },
+    "dependencies": {
+        "@types/strip-json-comments": "^0.0.30",
+        "strip-json-comments": "^5.0.3"
     }
 }
