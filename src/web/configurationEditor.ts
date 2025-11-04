@@ -3,6 +3,17 @@ import { DebugConfigurationProvider } from './debugTreeView';
 import { ConfigurationData, LaunchCompound, LaunchConfiguration } from './types';
 
 export class ConfigurationEditor {
+    private static openPanels = new Map<string, vscode.WebviewPanel>();
+
+    /**
+     * Escape template literals in JavaScript contexts but preserve VS Code variables
+     */
+    private static escapeForJsTemplate(value: string): string {
+        // Escape $ to prevent template literal evaluation in JavaScript
+        // This preserves VS Code variables like ${workspaceFolder} for runtime use
+        return value.replace(/\${/g, '\\${}');
+    }
+
     static openConfigurationEditor(
         config: LaunchConfiguration | LaunchCompound,
         provider: DebugConfigurationProvider
@@ -14,10 +25,21 @@ export class ConfigurationEditor {
         }
 
         const launchConfig = config as LaunchConfiguration;
+        const panelId = `debugConfigSettings_${launchConfig.name}`;
 
-        // Create and show webview panel
+        // Check if panel for this configuration already exists
+        if (ConfigurationEditor.openPanels.has(panelId)) {
+            const existingPanel = ConfigurationEditor.openPanels.get(panelId);
+            if (existingPanel) {
+                // Focus existing panel instead of creating a new one
+                existingPanel.reveal();
+                return;
+            }
+        }
+
+        // Create and show webview panel with unique ID
         const panel = vscode.window.createWebviewPanel(
-            'debugConfigSettings',
+            panelId,
             `Configuration Settings: ${launchConfig.name}`,
             vscode.ViewColumn.One,
             {
@@ -25,6 +47,9 @@ export class ConfigurationEditor {
                 retainContextWhenHidden: true
             }
         );
+
+        // Store the panel in our tracking map
+        ConfigurationEditor.openPanels.set(panelId, panel);
 
         // Prepare configuration data for the webview
         const configData: ConfigurationData = {
@@ -39,8 +64,16 @@ export class ConfigurationEditor {
         delete (configData.properties as any).type;
         delete (configData.properties as any).request;
 
+        // Store initial config data for change detection
+        const initialConfigJson = JSON.stringify(launchConfig, null, 2);
+
         // Generate HTML for the webview
-        panel.webview.html = this.getConfigurationSettingsWebviewContent(panel.webview, configData);
+        panel.webview.html = this.getConfigurationSettingsWebviewContent(panel.webview, configData, initialConfigJson);
+
+        // Handle panel disposal to clean up tracking
+        panel.onDidDispose(() => {
+            ConfigurationEditor.openPanels.delete(panelId);
+        });
 
         // Handle messages from the webview
         panel.webview.onDidReceiveMessage(
@@ -137,6 +170,31 @@ export class ConfigurationEditor {
                         break;
                     case 'cancel':
                         panel.dispose();
+                        break;
+                    case 'openLaunchJson':
+                        try {
+                            const launchJsonPath = provider['launchJsonPath'];
+                            const launchUri = vscode.Uri.file(launchJsonPath);
+                            const document = await vscode.workspace.openTextDocument(launchUri);
+                            await vscode.window.showTextDocument(document);
+                        } catch (error) {
+                            vscode.window.showErrorMessage(`Failed to open launch.json: ${error}`);
+                        }
+                        break;
+                    case 'checkUnsavedChanges':
+                        try {
+                            const currentConfig = JSON.parse(message.currentConfig);
+                            const initialConfig = JSON.parse(message.initialConfig);
+                            const hasChanges = JSON.stringify(currentConfig) !== JSON.stringify(initialConfig);
+
+                            panel.webview.postMessage({
+                                command: 'unsavedChangesResponse',
+                                hasChanges,
+                                currentConfig: message.currentConfig
+                            });
+                        } catch (error) {
+                            console.error('Error checking unsaved changes:', error);
+                        }
                         break;
                 }
             },
@@ -236,7 +294,7 @@ API_URL=http://localhost:3000
         }
     }
 
-    private static getConfigurationSettingsWebviewContent(webview: vscode.Webview, configData: ConfigurationData): string {
+    private static getConfigurationSettingsWebviewContent(webview: vscode.Webview, configData: ConfigurationData, initialConfigJson: string): string {
         // Generate type dropdown options
         const typeOptions = this.getCommonConfigurationTypes()
             .map(type => `<option value="${type}" ${type === configData.type ? 'selected' : ''}>${type}</option>`)
@@ -313,19 +371,26 @@ API_URL=http://localhost:3000
             display: flex;
             gap: 8px;
         }
-        .run-btn, .debug-btn {
+        .launch-json-btn, .run-btn, .debug-btn {
             display: flex;
             align-items: center;
             gap: 4px;
             padding: 6px 12px;
             border: 1px solid var(--vscode-button-border);
-            background-color: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
+            background-color: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
             cursor: pointer;
             border-radius: 3px;
             font-family: var(--vscode-font-family);
             font-size: var(--vscode-font-size);
             transition: background-color 0.2s;
+        }
+        .launch-json-btn:hover {
+            background-color: var(--vscode-button-hoverBackground);
+        }
+        .run-btn, .debug-btn {
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
         }
         .run-btn:hover {
             background-color: var(--vscode-button-hoverBackground);
@@ -554,6 +619,9 @@ API_URL=http://localhost:3000
         <div class="header">
             <h2>Configuration Settings</h2>
             <div class="header-actions">
+                <button type="button" class="launch-json-btn" onclick="openLaunchJson()" title="Open launch.json file">
+                    <span class="codicon codicon-file-json"></span> launch.json
+                </button>
                 <button type="button" class="run-btn" onclick="runConfiguration()" title="Run configuration without breakpoints">
                     <span class="codicon codicon-play"></span> Run
                 </button>
@@ -655,6 +723,31 @@ API_URL=http://localhost:3000
 
     <script>
         const vscode = acquireVsCodeApi();
+
+        // Store initial configuration for change detection
+        const initialConfig = \`${this.escapeForJsTemplate(initialConfigJson)}\`;
+        let isDirty = false;
+
+        // Debug function to check if all required DOM elements are present
+        function debugDomElements() {
+            const requiredElements = [
+                'configForm',
+                'jsonPreview',
+                'configName',
+                'configType',
+                'configRequest'
+            ];
+
+            const missingElements = requiredElements.filter(id => !document.getElementById(id));
+
+            if (missingElements.length > 0) {
+                console.error('Missing DOM elements:', missingElements);
+                return false;
+            }
+
+            console.log('All required DOM elements are present');
+            return true;
+        }
 
         function updateTypeFromSelect() {
             const select = document.getElementById('configTypeSelect');
@@ -765,35 +858,88 @@ API_URL=http://localhost:3000
             return env;
         }
 
-        function updateJsonPreview() {
-            const formData = new FormData(document.getElementById('configForm'));
-            const config = {};
+        function checkForChanges() {
+            const currentConfig = getCurrentFormConfig();
+            const currentConfigJson = JSON.stringify(currentConfig, null, 2);
+            const hasChanges = currentConfigJson !== initialConfig;
 
-            // Add basic properties from form (name, type, request)
-            for (let [key, value] of formData.entries()) {
-                if (key && !key.startsWith('env-')) {
-                    // Try to parse as JSON, otherwise keep as string
-                    try {
-                        config[key] = JSON.parse(value);
-                    } catch {
-                        config[key] = value;
+            // Update dirty state
+            isDirty = hasChanges;
+
+            // Update title to show unsaved changes indicator
+            if (hasChanges) {
+                document.title = document.title.replace(/^[●]?\s*/, '● ');
+            } else {
+                document.title = document.title.replace(/^[●]\s*/, '');
+            }
+        }
+
+        function getCurrentFormConfig() {
+            try {
+                const form = document.getElementById('configForm');
+                if (!form) {
+                    console.error('Form element not found');
+                    return {};
+                }
+
+                const formData = new FormData(form);
+                const config = {};
+
+                // Add basic properties from form (name, type, request)
+                for (let [key, value] of formData.entries()) {
+                    if (key && !key.startsWith('env-')) {
+                        // Try to parse as JSON, otherwise keep as string
+                        try {
+                            config[key] = JSON.parse(value);
+                        } catch {
+                            config[key] = value;
+                        }
                     }
                 }
-            }
 
-            // Add environment variables
-            const env = getEnvObject();
-            if (Object.keys(env).length > 0) {
-                config.env = env;
-            }
+                // Add environment variables
+                const env = getEnvObject();
+                if (Object.keys(env).length > 0) {
+                    config.env = env;
+                }
 
-            // Add env file if specified
-            const envFile = document.getElementById('envFile').value.trim();
-            if (envFile) {
-                config.envFile = envFile;
-            }
+                // Add env file if specified
+                const envFileInput = document.getElementById('envFile');
+                if (envFileInput) {
+                    const envFile = envFileInput.value.trim();
+                    if (envFile) {
+                        config.envFile = envFile;
+                    }
+                }
 
-            document.getElementById('jsonPreview').textContent = JSON.stringify(config, null, 2);
+                return config;
+            } catch (error) {
+                console.error('Error getting form configuration:', error);
+                return {};
+            }
+        }
+
+        function updateJsonPreview() {
+            try {
+                const config = getCurrentFormConfig();
+                const jsonString = JSON.stringify(config, null, 2);
+                const previewElement = document.getElementById('jsonPreview');
+
+                if (previewElement) {
+                    previewElement.textContent = jsonString;
+                    checkForChanges();
+                } else {
+                    console.error('JSON Preview element not found in DOM');
+                    // Try again after a short delay
+                    setTimeout(updateJsonPreview, 50);
+                }
+            } catch (error) {
+                console.error('Error updating JSON preview:', error);
+                const previewElement = document.getElementById('jsonPreview');
+                if (previewElement) {
+                    previewElement.textContent = 'Error generating JSON preview: ' + (error instanceof Error ? error.message : String(error));
+                }
+            }
         }
 
         function showError(message) {
@@ -881,6 +1027,12 @@ API_URL=http://localhost:3000
         }
 
         function cancel() {
+            if (isDirty) {
+                const result = confirm('You have unsaved changes. Are you sure you want to close without saving?');
+                if (!result) {
+                    return; // User cancelled the close
+                }
+            }
             vscode.postMessage({
                 command: 'cancel'
             });
@@ -921,6 +1073,12 @@ API_URL=http://localhost:3000
             vscode.postMessage({
                 command: 'runConfiguration',
                 config: config
+            });
+        }
+
+        function openLaunchJson() {
+            vscode.postMessage({
+                command: 'openLaunchJson'
             });
         }
 
@@ -1014,8 +1172,30 @@ API_URL=http://localhost:3000
             }
         });
 
-        // Initial JSON preview
-        updateJsonPreview();
+        // Initial JSON preview - wait for DOM to be ready
+        document.addEventListener('DOMContentLoaded', () => {
+            debugDomElements();
+            updateJsonPreview();
+        });
+
+        // Fallback: try to update immediately in case DOM is already loaded
+        if (document.readyState === 'loading') {
+            // DOM is still loading, event listener will handle it
+        } else {
+            // DOM is already loaded, update immediately
+            setTimeout(() => {
+                debugDomElements();
+                updateJsonPreview();
+            }, 100);
+        }
+
+        // Add beforeunload listener to catch window closing
+        window.addEventListener('beforeunload', (event) => {
+            if (isDirty) {
+                event.preventDefault();
+                event.returnValue = '';
+            }
+        });
     </script>
 </body>
 </html>`;
