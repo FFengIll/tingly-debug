@@ -103,9 +103,45 @@ export class DebugConfigurationItem extends vscode.TreeItem {
     }
 }
 
-export class DebugConfigurationProvider implements vscode.TreeDataProvider<DebugConfigurationItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<DebugConfigurationItem | undefined | null | void> = new vscode.EventEmitter<DebugConfigurationItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<DebugConfigurationItem | undefined | null | void> = this._onDidChangeTreeData.event;
+export interface ErrorConfiguration {
+    name: string;
+    type: 'error';
+    request: 'error';
+    error: {
+        message: string;
+        details?: string;
+    };
+}
+
+export class DebugErrorItem extends vscode.TreeItem {
+    constructor(
+        public readonly config: ErrorConfiguration,
+        public readonly collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None,
+        private clickBehavior?: ClickBehavior,
+        private launchJsonPath?: string
+    ) {
+        super(config.name, collapsibleState);
+        this.tooltip = `${config.error.message}\n\nClick to open launch.json for editing`;
+        this.description = 'Error loading configurations';
+        this.contextValue = 'error';
+        this.iconPath = this.getIconForError(config);
+
+        // Error items should have click command to open launch.json
+        this.command = {
+            command: 'vscode.open',
+            title: 'Open launch.json',
+            arguments: [vscode.Uri.file(launchJsonPath || '')]
+        };
+    }
+
+    private getIconForError(config: ErrorConfiguration): vscode.ThemeIcon {
+        return new vscode.ThemeIcon('warning');
+    }
+}
+
+export class DebugConfigurationProvider implements vscode.TreeDataProvider<DebugConfigurationItem | DebugErrorItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<DebugConfigurationItem | DebugErrorItem | undefined | null | void> = new vscode.EventEmitter<DebugConfigurationItem | DebugErrorItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<DebugConfigurationItem | DebugErrorItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
     private workspaceRoot: string;
     private launchJsonPath: string;
@@ -125,19 +161,19 @@ export class DebugConfigurationProvider implements vscode.TreeDataProvider<Debug
         this._onDidChangeTreeData.fire();
     }
 
-    getTreeItem(element: DebugConfigurationItem): vscode.TreeItem {
+    getTreeItem(element: DebugConfigurationItem | DebugErrorItem): vscode.TreeItem {
         return element;
     }
 
-    getChildren(element?: DebugConfigurationItem): Thenable<DebugConfigurationItem[]> {
+    getChildren(element?: DebugConfigurationItem | DebugErrorItem): Thenable<DebugConfigurationItem[] | DebugErrorItem[]> {
         if (!element) {
-            // Root level - return all configurations
+            // Root level - return all configurations or error items
             return this.getConfigurations();
         }
         return Promise.resolve([]);
     }
 
-    public async getConfigurations(): Promise<DebugConfigurationItem[]> {
+    public async getConfigurations(): Promise<DebugConfigurationItem[] | DebugErrorItem[]> {
         try {
             const configurations = await this.readConfigurationsOnly();
             const config = vscode.workspace.getConfiguration('ddd');
@@ -156,7 +192,24 @@ export class DebugConfigurationProvider implements vscode.TreeDataProvider<Debug
             return items;
         } catch (error) {
             console.error('Error reading launch.json configurations:', error);
-            return [];
+
+            // Return error item instead of empty array
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorDetails = `Failed to load debug configurations from launch.json. Please check the file format and try again.\n\nError details: ${errorMessage}`;
+
+            console.log(`Creating error item for: ${errorMessage}`);
+
+            const errorConfig: ErrorConfiguration = {
+                name: 'Configuration Error',
+                type: 'error',
+                request: 'error',
+                error: {
+                    message: errorMessage,
+                    details: errorDetails
+                }
+            };
+
+            return [new DebugErrorItem(errorConfig, vscode.TreeItemCollapsibleState.None, undefined, this.launchJsonPath)];
         }
     }
 
@@ -183,9 +236,16 @@ export class DebugConfigurationProvider implements vscode.TreeDataProvider<Debug
             const content = document.getText();
             return parseJSONCConfigurations(content);
         } catch (error) {
-            // Return empty array if file doesn't exist or is invalid
-            console.warn('Failed to read launch.json configurations, returning empty array:', error);
-            return [];
+            // Check if the error is due to file not found
+            if (error && typeof error === 'object' && 'code' in error && error.code === 'FileNotFound') {
+                // File doesn't exist - this is a normal case, return empty array
+                console.log('launch.json not found, returning empty configurations');
+                return [];
+            }
+
+            // For other errors (parsing errors, permission issues, etc.), throw to let the caller handle it
+            console.warn('Failed to read launch.json configurations:', error);
+            throw error;
         }
     }
 

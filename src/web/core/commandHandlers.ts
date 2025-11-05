@@ -3,13 +3,13 @@ import { ConfigurationGenerator, ConfigurationTarget } from '../config/configura
 import { CommandGenerator, SymbolDetector, SymbolInfo } from '../config/debugCommandGenerator';
 import { FileTypeMapper } from '../util/fileTypeMapper';
 import { ConfigurationEditor } from '../views/configurationEditor';
-import { DebugConfigurationItem, DebugConfigurationProvider } from '../views/debugPanel';
+import { DebugConfigurationItem, DebugConfigurationProvider, DebugErrorItem, ErrorConfiguration } from '../views/debugPanel';
 import { LaunchConfiguration } from './types';
 
 export function registerCommandHandlers(
     context: vscode.ExtensionContext,
     provider: DebugConfigurationProvider,
-    treeView: vscode.TreeView<DebugConfigurationItem>
+    treeView: vscode.TreeView<DebugConfigurationItem | DebugErrorItem>
 ): void {
 
     /**
@@ -42,9 +42,9 @@ export function registerCommandHandlers(
 
             // Show action options
             const action = await vscode.window.showQuickPick([
-                { label: '$(terminal) Run in Terminal', description: `Execute command in integrated terminal`, value: 'terminal' },
-                { label: '$(clippy) Copy to Clipboard', description: `Copy command to clipboard`, value: 'clipboard' },
-                { label: '$(debug) Create Debug Configuration', description: `Add as debug configuration to launch.json`, value: 'debug' }
+                { label: '$(gear) Create', description: `Create debug configuration`, value: 'create' },
+                { label: '$(run) Create and Run', description: `Create debug configuration and run it`, value: 'create-and-run' },
+                { label: '$(debug) Create and Debug', description: `Create debug configuration and debug it`, value: 'create-and-debug' }
             ], {
                 placeHolder: `Generated ${commandType} command: ${formattedCommand}`,
                 title: `${commandType === 'run' ? 'Run' : 'Debug'} Command for "${symbol.name}"`
@@ -55,15 +55,14 @@ export function registerCommandHandlers(
             }
 
             switch (action.value) {
-                case 'terminal':
-                    await executeInTerminal(commandTemplate, symbol);
+                case 'create':
+                    await createDebugConfigurationAndOpen(commandTemplate, symbol, provider);
                     break;
-                case 'clipboard':
-                    await vscode.env.clipboard.writeText(formattedCommand);
-                    vscode.window.showInformationMessage(`Command copied to clipboard: ${formattedCommand}`);
+                case 'create-and-run':
+                    await createAndRunConfiguration(commandTemplate, symbol, provider);
                     break;
-                case 'debug':
-                    await createDebugConfiguration(commandTemplate, symbol, provider);
+                case 'create-and-debug':
+                    await createAndDebugConfiguration(commandTemplate, symbol, provider);
                     break;
             }
 
@@ -74,39 +73,292 @@ export function registerCommandHandlers(
         }
     }
 
-    /**
-     * Execute command in integrated terminal
-     */
-    async function executeInTerminal(commandTemplate: any, symbol: SymbolInfo): Promise<void> {
-        const terminal = vscode.window.createTerminal({
-            name: `${symbol.language} ${symbol.name}`,
-            cwd: commandTemplate.cwd || symbol.workspaceRoot
-        });
+/**
+ * Type guard to check if an item is a DebugConfigurationItem
+ */
+function isDebugConfigurationItem(item: any): item is DebugConfigurationItem {
+    return item && 'config' in item && 'type' in item.config && item.config.type !== 'error';
+}
 
-        // Set environment variables if needed
-        if (commandTemplate.env) {
-            Object.entries(commandTemplate.env).forEach(([key, value]) => {
-                terminal.sendText(`export ${key}="${value}"`);
-            });
+/**
+ * Type guard to check if an item is a DebugErrorItem
+ */
+function isDebugErrorItem(item: any): item is DebugErrorItem {
+    return item && 'config' in item && item.config.type === 'error';
+}
+
+/**
+ * Check if the configurations contain only an error item
+ */
+function hasConfigurationError(configs: any[]): configs is [DebugErrorItem] {
+    return configs.length === 1 && configs[0] && isDebugErrorItem(configs[0]);
+}
+
+/**
+ * Generate a unique configuration name by adding suffix based on user preference
+ */
+    async function generateUniqueConfigurationName(baseName: string, debugProvider: DebugConfigurationProvider): Promise<string | null> {
+        const config = vscode.workspace.getConfiguration('ddd');
+        const suffixStyle = config.get<string>('nameCollisionSuffixStyle', 'index');
+
+        try {
+            const existingConfigs = await debugProvider.getConfigurations();
+
+            // Check if there's an error in the configurations
+            if (hasConfigurationError(existingConfigs)) {
+                // There's an error reading configurations, use simple naming strategy
+                const timestamp = new Date().getTime();
+                return `${baseName}-${timestamp}`;
+            }
+
+            const existingNames = new Set(existingConfigs.filter(isDebugConfigurationItem).map(item => item.config.name));
+
+            if (suffixStyle === 'timestamp') {
+                // Try timestamp suffix first
+                const now = new Date();
+                const timestamp = now.getFullYear() +
+                    String(now.getMonth() + 1).padStart(2, '0') +
+                    String(now.getDate()).padStart(2, '0') + '-' +
+                    String(now.getHours()).padStart(2, '0') +
+                    String(now.getMinutes()).padStart(2, '0') +
+                    String(now.getSeconds()).padStart(2, '0');
+
+                const timestampName = `${baseName}-${timestamp}`;
+                if (!existingNames.has(timestampName)) {
+                    return timestampName;
+                }
+            }
+
+            // Fallback to index suffix (or use it directly if configured)
+            let counter = 1;
+            while (true) {
+                const indexedName = `${baseName} - ${counter}`;
+                if (!existingNames.has(indexedName)) {
+                    return indexedName;
+                }
+                counter++;
+
+                // Prevent infinite loop
+                if (counter > 9999) {
+                    throw new Error('Unable to generate unique configuration name after many attempts');
+                }
+            }
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to generate unique configuration name: ${error}`);
+            return null;
         }
-
-        // Execute the command
-        const formattedCommand = CommandGenerator.formatCommand(commandTemplate);
-        terminal.sendText(formattedCommand);
-        terminal.show();
-
-        vscode.window.showInformationMessage(`Running ${symbol.name} in terminal`);
     }
 
     /**
-     * Create debug configuration from command template
+     * Create debug configuration from command template and open it
      */
-    async function createDebugConfiguration(commandTemplate: any, symbol: SymbolInfo, debugProvider: DebugConfigurationProvider): Promise<void> {
-        const debugConfig = CommandGenerator.createDebugConfiguration(commandTemplate, symbol);
+    async function createDebugConfigurationAndOpen(commandTemplate: any, symbol: SymbolInfo, debugProvider: DebugConfigurationProvider): Promise<void> {
+        const originalConfig = CommandGenerator.createDebugConfiguration(commandTemplate, symbol);
 
         try {
-            await debugProvider.addConfiguration(debugConfig);
-            vscode.window.showInformationMessage(`Debug configuration "${debugConfig.name}" created successfully!`);
+            // Check for existing configuration with the same name
+            const existingConfigs = await debugProvider.getConfigurations();
+
+            // Check if there's an error reading configurations
+            if (hasConfigurationError(existingConfigs)) {
+                vscode.window.showErrorMessage(`Cannot create configuration: ${existingConfigs[0].config.error.message}`);
+                return;
+            }
+
+            const existingConfig = existingConfigs.filter(isDebugConfigurationItem).find(item => item.config.name === originalConfig.name);
+
+            if (existingConfig) {
+                // Name collision detected - show options to user
+                const action = await vscode.window.showQuickPick([
+                    { label: '$(file-text) Open Existing', description: `Open existing configuration "${originalConfig.name}"`, value: 'open-existing' },
+                    { label: '$(add) Create New', description: `Create new configuration with modified name`, value: 'create-new' },
+                    { label: '$(x) Cancel', description: `Cancel operation`, value: 'cancel' }
+                ], {
+                    placeHolder: `Configuration "${originalConfig.name}" already exists`,
+                    title: 'Name Collision'
+                });
+
+                switch (action?.value) {
+                    case 'open-existing':
+                        await ConfigurationEditor.openConfigurationEditor(existingConfig.config, debugProvider);
+                        return;
+                    case 'create-new':
+                        // Generate unique name and create new config
+                        const uniqueName = await generateUniqueConfigurationName(originalConfig.name, debugProvider);
+                        if (!uniqueName) {
+                            return; // User cancelled
+                        }
+                        originalConfig.name = uniqueName;
+                        break;
+                    case 'cancel':
+                    default:
+                        return; // User cancelled
+                }
+            }
+
+            // Create the configuration
+            await debugProvider.addConfiguration(originalConfig);
+            vscode.window.showInformationMessage(`Debug configuration "${originalConfig.name}" created successfully!`);
+
+            // Open the newly created configuration after a short delay to ensure UI updates
+            setTimeout(async () => {
+                try {
+                    const configItems = await debugProvider.getConfigurations();
+
+                    // Check if there's an error reading configurations
+                    if (hasConfigurationError(configItems)) {
+                        console.error('Failed to open configuration editor due to configuration error:', configItems[0].config.error.message);
+                        return;
+                    }
+
+                    const createdItem = configItems.filter(isDebugConfigurationItem).find(item => item.config.name === originalConfig.name);
+                    if (createdItem) {
+                        await ConfigurationEditor.openConfigurationEditor(createdItem.config, debugProvider);
+                    }
+                } catch (error) {
+                    console.error('Failed to open configuration editor:', error);
+                }
+            }, 500);
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to create debug configuration: ${error}`);
+        }
+    }
+
+    /**
+     * Create debug configuration and immediately run it
+     */
+    async function createAndRunConfiguration(commandTemplate: any, symbol: SymbolInfo, debugProvider: DebugConfigurationProvider): Promise<void> {
+        let debugConfig = CommandGenerator.createDebugConfiguration(commandTemplate, symbol);
+
+        try {
+            // Check for existing configuration with the same name
+            const existingConfigs = await debugProvider.getConfigurations();
+
+            // Check if there's an error reading configurations
+            if (hasConfigurationError(existingConfigs)) {
+                vscode.window.showErrorMessage(`Cannot create configuration: ${existingConfigs[0].config.error.message}`);
+                return;
+            }
+
+            const existingConfig = existingConfigs.filter(isDebugConfigurationItem).find(item => item.config.name === debugConfig.name);
+
+            if (existingConfig) {
+                // Name collision detected - show options to user
+                const action = await vscode.window.showQuickPick([
+                    { label: '$(run) Run Existing', description: `Run existing configuration "${debugConfig.name}"`, value: 'run-existing' },
+                    { label: '$(add) Create New', description: `Create new configuration with modified name`, value: 'create-new' },
+                    { label: '$(x) Cancel', description: `Cancel operation`, value: 'cancel' }
+                ], {
+                    placeHolder: `Configuration "${debugConfig.name}" already exists`,
+                    title: 'Name Collision'
+                });
+
+                switch (action?.value) {
+                    case 'run-existing':
+                        debugConfig = existingConfig.config;
+                        break;
+                    case 'create-new':
+                        // Generate unique name and create new config
+                        const uniqueName = await generateUniqueConfigurationName(debugConfig.name, debugProvider);
+                        if (!uniqueName) {
+                            return; // User cancelled
+                        }
+                        debugConfig.name = uniqueName;
+                        await debugProvider.addConfiguration(debugConfig);
+                        break;
+                    case 'cancel':
+                    default:
+                        return; // User cancelled
+                }
+            } else {
+                // Create the configuration
+                await debugProvider.addConfiguration(debugConfig);
+            }
+
+            vscode.window.showInformationMessage(`Debug configuration "${debugConfig.name}" created and running!`);
+
+            // Run the configuration immediately after creation
+            setTimeout(async () => {
+                try {
+                    // Disable all breakpoints for run mode
+                    await vscode.commands.executeCommand('workbench.debug.viewlet.action.disableAllBreakpoints');
+
+                    await vscode.debug.startDebugging(undefined, debugConfig);
+                } catch (error) {
+                    console.error('Failed to start debug session:', error);
+                    vscode.window.showErrorMessage(`Failed to run configuration: ${error}`);
+                }
+            }, 500);
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to create debug configuration: ${error}`);
+        }
+    }
+
+    /**
+     * Create debug configuration and immediately debug it
+     */
+    async function createAndDebugConfiguration(commandTemplate: any, symbol: SymbolInfo, debugProvider: DebugConfigurationProvider): Promise<void> {
+        let debugConfig = CommandGenerator.createDebugConfiguration(commandTemplate, symbol);
+
+        try {
+            // Check for existing configuration with the same name
+            const existingConfigs = await debugProvider.getConfigurations();
+
+            // Check if there's an error reading configurations
+            if (hasConfigurationError(existingConfigs)) {
+                vscode.window.showErrorMessage(`Cannot create configuration: ${existingConfigs[0].config.error.message}`);
+                return;
+            }
+
+            const existingConfig = existingConfigs.filter(isDebugConfigurationItem).find(item => item.config.name === debugConfig.name);
+
+            if (existingConfig) {
+                // Name collision detected - show options to user
+                const action = await vscode.window.showQuickPick([
+                    { label: '$(debug) Debug Existing', description: `Debug existing configuration "${debugConfig.name}"`, value: 'debug-existing' },
+                    { label: '$(add) Create New', description: `Create new configuration with modified name`, value: 'create-new' },
+                    { label: '$(x) Cancel', description: `Cancel operation`, value: 'cancel' }
+                ], {
+                    placeHolder: `Configuration "${debugConfig.name}" already exists`,
+                    title: 'Name Collision'
+                });
+
+                switch (action?.value) {
+                    case 'debug-existing':
+                        debugConfig = existingConfig.config;
+                        break;
+                    case 'create-new':
+                        // Generate unique name and create new config
+                        const uniqueName = await generateUniqueConfigurationName(debugConfig.name, debugProvider);
+                        if (!uniqueName) {
+                            return; // User cancelled
+                        }
+                        debugConfig.name = uniqueName;
+                        await debugProvider.addConfiguration(debugConfig);
+                        break;
+                    case 'cancel':
+                    default:
+                        return; // User cancelled
+                }
+            } else {
+                // Create the configuration
+                await debugProvider.addConfiguration(debugConfig);
+            }
+
+            vscode.window.showInformationMessage(`Debug configuration "${debugConfig.name}" created and debugging!`);
+
+            // Debug the configuration immediately after creation
+            setTimeout(async () => {
+                try {
+                    // Enable all breakpoints for debug mode
+                    await vscode.commands.executeCommand('workbench.debug.viewlet.action.enableAllBreakpoints');
+
+                    await vscode.debug.startDebugging(undefined, debugConfig);
+                } catch (error) {
+                    console.error('Failed to start debug session:', error);
+                    vscode.window.showErrorMessage(`Failed to debug configuration: ${error}`);
+                }
+            }, 500);
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to create debug configuration: ${error}`);
         }
@@ -135,12 +387,16 @@ export function registerCommandHandlers(
                     progress.report({ increment: 100, message: "Complete!" });
 
                     // Show success message with configuration count
-                    const configCount = configurations.length;
-                    const message = configCount === 0
-                        ? "No debug configurations found. Use the + button to add one."
-                        : `Successfully refreshed! Found ${configCount} debug configuration${configCount === 1 ? '' : 's'}.`;
+                    if (hasConfigurationError(configurations)) {
+                        vscode.window.showErrorMessage(`Failed to load debug configurations: ${configurations[0].config.error.message}`);
+                    } else {
+                        const configCount = configurations.length;
+                        const message = configCount === 0
+                            ? "No debug configurations found. Use the + button to add one."
+                            : `Successfully refreshed! Found ${configCount} debug configuration${configCount === 1 ? '' : 's'}.`;
 
-                    vscode.window.showInformationMessage(message);
+                        vscode.window.showInformationMessage(message);
+                    }
 
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -352,7 +608,7 @@ export function registerCommandHandlers(
                 try {
                     // Find the newly created configuration in the provider
                     const configItems = await provider.getConfigurations();
-                    const createdItem = configItems.find(item => item.config.name === finalConfigName);
+                    const createdItem = configItems.filter(isDebugConfigurationItem).find(item => item.config.name === finalConfigName);
                     if (createdItem) {
                         await ConfigurationEditor.openConfigurationEditor(createdItem.config, provider);
                     }
@@ -381,6 +637,7 @@ export function registerCommandHandlers(
         await handleGenerateDirectoryDebugConfig(uri, provider);
     });
 
+    
     // Hello world command
     const helloWorldCommand = vscode.commands.registerCommand('ddd.helloWorld', () => {
         vscode.window.showInformationMessage('Hello World from Debug and Run Configurations extension!');

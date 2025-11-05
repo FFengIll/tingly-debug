@@ -25,9 +25,9 @@ export function parseJSONCConfigurations(text: string): any[] {
         const data = parseJSONC(text);
         return data.configurations || [];
     } catch (error) {
-        // If parsing fails, return empty configurations array
-        console.warn('Failed to parse launch.json configurations, returning empty array:', error);
-        return [];
+        // If parsing fails, throw the error to let the caller handle it
+        console.error('Failed to parse launch.json configurations:', error);
+        throw error;
     }
 }
 

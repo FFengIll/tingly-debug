@@ -2,7 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { registerCommandHandlers } from './core/commandHandlers';
-import { DebugConfigurationProvider } from './views/debugPanel';
+import { DebugConfigurationProvider, DebugConfigurationItem, DebugErrorItem } from './views/debugPanel';
 
 // This method is called when your extension is activated
 export function activate(context: vscode.ExtensionContext) {
@@ -13,7 +13,7 @@ export function activate(context: vscode.ExtensionContext) {
     const treeView = vscode.window.createTreeView('ddd.debugConfigurations', {
         treeDataProvider: provider,
         showCollapseAll: false
-    });
+    }) as vscode.TreeView<DebugConfigurationItem | DebugErrorItem>;
 
     // Register all command handlers
     registerCommandHandlers(context, provider, treeView);
