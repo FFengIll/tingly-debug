@@ -3,7 +3,7 @@
     "displayName": "Tingly Debug Configurations",
     "publisher": "FFengIll",
     "description": "A debug and run configuration manager and UI for VS Code",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "engines": {
         "vscode": "^1.90.0"
     },
@@ -13,6 +13,7 @@
     "categories": [
         "Other"
     ],
+    "icon": "resource/lightning-helix.png",
     "activationEvents": [],
     "browser": "./dist/web/extension.js",
     "contributes": {
@@ -81,7 +82,7 @@
             "debug": [
                 {
                     "id": "tingly.debug.debugConfigurations",
-                    "name": "tingly.debug Configurations"
+                    "name": "Tingly Debug Configurations"
                 }
             ]
         },
