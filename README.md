@@ -2,6 +2,10 @@
 
 A JetBrains-inspired debug and run configuration manager for Visual Studio Code with intuitive UI and seamless launch.json synchronization.
 
+## 📸 Preview
+
+![](resource/preview.png)
+
 ## ✨ Key Features
 
 - **🎯 Visual Configuration Management** - Clean tree view with automatic launch.json sync
