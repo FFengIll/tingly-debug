@@ -90,7 +90,7 @@ Click the **⚙️** icon on any configuration to access advanced editing:
 
 ### Click Behavior
 
-**`ddd.clickBehavior`**: Controls interaction with configuration items
+**`tingly.debug.clickBehavior`**: Controls interaction with configuration items
 
 - **`openSettings`** (default): Click opens configuration editor
 - **`none`**: Click has no action (use toolbar buttons)
@@ -151,7 +151,7 @@ This extension is released under the [MIT License](LICENSE).
 A: Ensure you have a `.vscode/launch.json` file in your workspace. The extension automatically creates one when you add your first configuration.
 
 **Q: Click behavior not working?**
-A: Check your `ddd.clickBehavior` setting in VS Code preferences.
+A: Check your `tingly.debug.clickBehavior` setting in VS Code preferences.
 
 **Q: Configuration not saving?**
 A: Verify your workspace folder has write permissions and check if launch.json is read-only.

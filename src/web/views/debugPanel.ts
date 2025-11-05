@@ -21,7 +21,7 @@ export class DebugConfigurationItem extends vscode.TreeItem {
 
         if (behavior === 'openSettings') {
             this.command = {
-                command: 'ddd.debugConfig.openSettings',
+                command: 'tingly.debug.debugConfig.openSettings',
                 title: 'Open Configuration Settings',
                 arguments: [this]
             };

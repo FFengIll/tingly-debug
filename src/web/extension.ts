@@ -10,7 +10,7 @@ export function activate(context: vscode.ExtensionContext) {
     const provider = new DebugConfigurationProvider();
 
     // Create tree view
-    const treeView = vscode.window.createTreeView('ddd.debugConfigurations', {
+    const treeView = vscode.window.createTreeView('tingly.debug.debugConfigurations', {
         treeDataProvider: provider,
         showCollapseAll: false
     }) as vscode.TreeView<DebugConfigurationItem | DebugErrorItem>;
@@ -49,7 +49,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Watch for configuration changes
     const configWatcher = vscode.workspace.onDidChangeConfiguration(async (e) => {
-        if (e.affectsConfiguration('ddd.clickBehavior')) {
+        if (e.affectsConfiguration('tingly.debug.clickBehavior')) {
             try {
                 await provider.refresh();
             } catch (error) {

@@ -365,7 +365,7 @@ function hasConfigurationError(configs: any[]): configs is [DebugErrorItem] {
     }
 
     // Refresh command
-    const refreshCommand = vscode.commands.registerCommand('ddd.debugConfig.refresh', async () => {
+    const refreshCommand = vscode.commands.registerCommand('tingly.debug.debugConfig.refresh', async () => {
         try {
             // Show loading indicator
             await vscode.window.withProgress({
@@ -418,7 +418,7 @@ function hasConfigurationError(configs: any[]): configs is [DebugErrorItem] {
     });
 
     // Add configuration command
-    const addCommand = vscode.commands.registerCommand('ddd.debugConfig.add', async () => {
+    const addCommand = vscode.commands.registerCommand('tingly.debug.debugConfig.add', async () => {
         const name = await vscode.window.showInputBox({
             placeHolder: 'Enter configuration name',
             prompt: 'Configuration name'
@@ -484,12 +484,12 @@ function hasConfigurationError(configs: any[]): configs is [DebugErrorItem] {
     });
 
     // Edit configuration command
-    const editCommand = vscode.commands.registerCommand('ddd.debugConfig.edit', async (item: DebugConfigurationItem) => {
+    const editCommand = vscode.commands.registerCommand('tingly.debug.debugConfig.edit', async (item: DebugConfigurationItem) => {
         await ConfigurationEditor.openConfigurationEditor(item.config, provider);
     });
 
     // Delete configuration command
-    const deleteCommand = vscode.commands.registerCommand('ddd.debugConfig.delete', async (item: DebugConfigurationItem) => {
+    const deleteCommand = vscode.commands.registerCommand('tingly.debug.debugConfig.delete', async (item: DebugConfigurationItem) => {
         const result = await vscode.window.showWarningMessage(
             `Are you sure you want to delete configuration "${item.config.name}"?`,
             'Delete',
@@ -507,7 +507,7 @@ function hasConfigurationError(configs: any[]): configs is [DebugErrorItem] {
     });
 
     // Duplicate configuration command
-    const duplicateCommand = vscode.commands.registerCommand('ddd.debugConfig.duplicate', async (item: DebugConfigurationItem) => {
+    const duplicateCommand = vscode.commands.registerCommand('tingly.debug.debugConfig.duplicate', async (item: DebugConfigurationItem) => {
         try {
             await provider.duplicateConfiguration(item.config);
             vscode.window.showInformationMessage(`Configuration "${item.config.name}" duplicated successfully!`);
@@ -517,7 +517,7 @@ function hasConfigurationError(configs: any[]): configs is [DebugErrorItem] {
     });
 
     // Run configuration command
-    const runCommand = vscode.commands.registerCommand('ddd.debugConfig.run', async (item: DebugConfigurationItem) => {
+    const runCommand = vscode.commands.registerCommand('tingly.debug.debugConfig.run', async (item: DebugConfigurationItem) => {
         try {
             // Only run configurations, not compounds
             if ('configurations' in item.config) {
@@ -536,7 +536,7 @@ function hasConfigurationError(configs: any[]): configs is [DebugErrorItem] {
     });
 
     // Debug configuration command
-    const debugCommand = vscode.commands.registerCommand('ddd.debugConfig.debug', async (item: DebugConfigurationItem) => {
+    const debugCommand = vscode.commands.registerCommand('tingly.debug.debugConfig.debug', async (item: DebugConfigurationItem) => {
         try {
             // Only debug configurations, not compounds
             if ('configurations' in item.config) {
@@ -555,7 +555,7 @@ function hasConfigurationError(configs: any[]): configs is [DebugErrorItem] {
     });
 
     // Create configuration from current file
-    const createFromFileCommand = vscode.commands.registerCommand('ddd.debugConfig.createFromFile', async () => {
+    const createFromFileCommand = vscode.commands.registerCommand('tingly.debug.debugConfig.createFromFile', async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
             vscode.window.showWarningMessage('No active file found. Please open a file to create a configuration.');
@@ -622,24 +622,24 @@ function hasConfigurationError(configs: any[]): configs is [DebugErrorItem] {
     });
 
     // Open settings command (using configuration editor)
-    const openSettingsCommand = vscode.commands.registerCommand('ddd.debugConfig.openSettings', async (item: DebugConfigurationItem) => {
+    const openSettingsCommand = vscode.commands.registerCommand('tingly.debug.debugConfig.openSettings', async (item: DebugConfigurationItem) => {
         console.log('openSettingsCommand triggered for item:', item.config.name);
         await ConfigurationEditor.openConfigurationEditor(item.config, provider);
     });
 
     // Generate debug command from symbol (used for both run and debug modes)
-    const generateDebugCommandCommand = vscode.commands.registerCommand('ddd.generateDebugCommand', async () => {
+    const generateDebugCommandCommand = vscode.commands.registerCommand('tingly.debug.generateDebugCommand', async () => {
         await handleGenerateCommand('debug');
     });
 
     // Generate debug configuration from directory
-    const generateDebugConfigFromDirectoryCommand = vscode.commands.registerCommand('ddd.generateDebugConfigFromDirectory', async (uri: vscode.Uri) => {
+    const generateDebugConfigFromDirectoryCommand = vscode.commands.registerCommand('tingly.debug.generateDebugConfigFromDirectory', async (uri: vscode.Uri) => {
         await handleGenerateDirectoryDebugConfig(uri, provider);
     });
 
     
     // Hello world command
-    const helloWorldCommand = vscode.commands.registerCommand('ddd.helloWorld', () => {
+    const helloWorldCommand = vscode.commands.registerCommand('tingly.debug.helloWorld', () => {
         vscode.window.showInformationMessage('Hello World from Debug and Run Configurations extension!');
     });
 
@@ -673,13 +673,66 @@ async function showSymbolSelector(): Promise<SymbolInfo | null> {
     const document = editor.document;
 
     // Get document symbols
-    const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-        'vscode.executeDocumentSymbolProvider',
-        document.uri
-    );
+    let symbols: vscode.DocumentSymbol[] | undefined;
+    try {
+        symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+            'vscode.executeDocumentSymbolProvider',
+            document.uri
+        );
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const workspaceRoot = workspaceFolders?.[0]?.uri.fsPath || '';
+
+        const documentInfo = {
+            uri: document.uri.toString(),
+            fsPath: document.uri.fsPath,
+            scheme: document.uri.scheme,
+            language: document.languageId,
+            workspace: workspaceRoot
+        };
+
+        // Enhanced logging for developers
+        console.error('=== Symbol Selector Error Details ===');
+        console.error('Error:', errorMessage);
+        console.error('Stack:', errorStack);
+        console.error('Document Info:', JSON.stringify(documentInfo, null, 2));
+        console.error('VSCode Version:', vscode.version);
+        console.error('Platform:', process.platform);
+        console.error('=======================================');
+
+        // Show user-friendly message with option to view details
+        const showDetails = 'Show Details';
+        const result = await vscode.window.showErrorMessage(
+            `Failed to analyze symbols: ${errorMessage}`,
+            showDetails
+        );
+
+        if (result === showDetails) {
+            // Show detailed error information in output channel
+            const outputChannel = vscode.window.createOutputChannel('DDD Debug Errors');
+            outputChannel.appendLine('=== Symbol Selector Error Details ===');
+            outputChannel.appendLine(`Timestamp: ${new Date().toISOString()}`);
+            outputChannel.appendLine(`Error: ${errorMessage}`);
+            if (errorStack) {
+                outputChannel.appendLine(`Stack Trace:\n${errorStack}`);
+            }
+            outputChannel.appendLine(`Document URI: ${documentInfo.uri}`);
+            outputChannel.appendLine(`Document Path: ${documentInfo.fsPath}`);
+            outputChannel.appendLine(`Language: ${documentInfo.language}`);
+            outputChannel.appendLine(`Workspace Root: ${documentInfo.workspace}`);
+            outputChannel.appendLine(`Platform: ${process.platform}`);
+            outputChannel.appendLine(`VSCode Version: ${vscode.version}`);
+            outputChannel.appendLine('=======================================');
+            outputChannel.show();
+        }
+
+        return null;
+    }
 
     if (!symbols || symbols.length === 0) {
-        vscode.window.showWarningMessage('No symbols found in this file. You can select functions, classes, methods, or tests.');
+        vscode.window.showWarningMessage('No symbols found in this file. You can select functions, classes, methods, or tests. Make sure appropriate language extensions are installed.');
         return null;
     }
 
